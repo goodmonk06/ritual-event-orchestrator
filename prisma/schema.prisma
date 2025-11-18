@@ -1,0 +1,123 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model RitualTemplate {
+  id                   String           @id @default(cuid())
+  communityId          String
+  key                  String           @unique
+  name                 String
+  descriptionMarkdown  String?
+  ritualType           RitualType
+  defaultDurationMinutes Int?
+  defaultTagsJson      String?          @db.Text
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+
+  steps                RitualStep[]
+  instances            RitualInstance[]
+
+  @@index([communityId])
+  @@index([key])
+}
+
+model RitualStep {
+  id                   String           @id @default(cuid())
+  templateId           String
+  orderIndex           Int
+  stepType             StepType
+  title                String
+  instructionsMarkdown String?          @db.Text
+  durationMinutes      Int?
+  metadataJson         String?          @db.Text
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+
+  template             RitualTemplate   @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@index([templateId, orderIndex])
+}
+
+model RitualInstance {
+  id               String                      @id @default(cuid())
+  templateId       String
+  scheduledStart   DateTime
+  scheduledEnd     DateTime
+  status           InstanceStatus              @default(scheduled)
+  createdAt        DateTime                    @default(now())
+  updatedAt        DateTime                    @updatedAt
+
+  template         RitualTemplate              @relation(fields: [templateId], references: [id])
+  participants     ParticipantRegistration[]
+  outcomes         OutcomeRecord[]
+
+  @@index([templateId])
+  @@index([status])
+  @@index([scheduledStart])
+}
+
+model ParticipantRegistration {
+  id                String           @id @default(cuid())
+  ritualInstanceId  String
+  memberId          String
+  registeredAt      DateTime         @default(now())
+  status            ParticipantStatus @default(registered)
+  checkInAt         DateTime?
+  checkOutAt        DateTime?
+
+  ritualInstance    RitualInstance   @relation(fields: [ritualInstanceId], references: [id], onDelete: Cascade)
+
+  @@unique([ritualInstanceId, memberId])
+  @@index([ritualInstanceId])
+  @@index([memberId])
+}
+
+model OutcomeRecord {
+  id                String           @id @default(cuid())
+  ritualInstanceId  String
+  memberId          String
+  notesMarkdown     String?          @db.Text
+  rating            Int?
+  tagsJson          String?          @db.Text
+  createdAt         DateTime         @default(now())
+
+  ritualInstance    RitualInstance   @relation(fields: [ritualInstanceId], references: [id], onDelete: Cascade)
+
+  @@index([ritualInstanceId])
+  @@index([memberId])
+}
+
+enum RitualType {
+  live_call
+  asynchronous_challenge
+  hybrid
+}
+
+enum StepType {
+  talk
+  meditation
+  breakout
+  sharing
+  exercise
+}
+
+enum InstanceStatus {
+  scheduled
+  in_progress
+  completed
+  cancelled
+}
+
+enum ParticipantStatus {
+  registered
+  attended
+  no_show
+}

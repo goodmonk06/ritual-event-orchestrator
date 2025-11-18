@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: ritual_user
+      POSTGRES_PASSWORD: ritual_password
+      POSTGRES_DB: ritual_orchestrator
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ritual_user -d ritual_orchestrator"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: "postgresql://ritual_user:ritual_password@db:5432/ritual_orchestrator?schema=public"
+      NOTIFICATION_HUB_URL: "http://localhost:3001"
+      CURRENCY_ECONOMY_URL: "http://localhost:3002"
+      QUEST_ENGINE_URL: "http://localhost:3003"
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./prisma:/app/prisma
+
+volumes:
+  postgres_data:
