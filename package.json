@@ -9,12 +9,17 @@
     "lint": "next lint",
     "test": "jest --watch",
     "test:ci": "jest --ci",
+    "typecheck": "tsc --noEmit",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
     "db:migrate": "prisma migrate dev",
     "db:migrate:deploy": "prisma migrate deploy",
     "db:seed": "tsx prisma/seed.ts",
+    "db:seed:enhanced": "tsx prisma/seed-enhanced.ts",
     "db:studio": "prisma studio",
     "db:push": "prisma db push",
-    "prisma:generate": "prisma generate"
+    "db:reset": "prisma migrate reset --force",
+    "prisma:generate": "prisma generate",
+    "cli": "tsx scripts/cli.ts"
   },
   "dependencies": {
     "next": "^14.2.0",

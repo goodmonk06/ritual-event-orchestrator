@@ -10,6 +10,107 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model Community {
+  id                String            @id @default(cuid())
+  name              String
+  slug              String            @unique
+  descriptionMarkdown String?         @db.Text
+  settings          String?           @db.Text  // JSON settings
+  isActive          Boolean           @default(true)
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  templates         RitualTemplate[]
+  facilitators      Facilitator[]
+  series            RitualSeries[]
+
+  @@index([slug])
+}
+
+model Facilitator {
+  id                String            @id @default(cuid())
+  communityId       String
+  memberId          String            // External member ID
+  name              String
+  bio               String?           @db.Text
+  specialties       String?           @db.Text  // JSON array
+  rating            Float?
+  totalRitualsLed   Int               @default(0)
+  isActive          Boolean           @default(true)
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  community         Community         @relation(fields: [communityId], references: [id])
+  instances         RitualInstance[]
+  feedbackReceived  RitualFeedback[]
+
+  @@unique([communityId, memberId])
+  @@index([communityId])
+  @@index([memberId])
+}
+
+model Tag {
+  id          String          @id @default(cuid())
+  name        String
+  slug        String          @unique
+  category    TagCategory     @default(general)
+  description String?
+  color       String?         // Hex color code
+  createdAt   DateTime        @default(now())
+
+  templates   TemplateTag[]
+  instances   InstanceTag[]
+
+  @@index([category])
+  @@index([slug])
+}
+
+model TemplateTag {
+  templateId  String
+  tagId       String
+  createdAt   DateTime        @default(now())
+
+  template    RitualTemplate  @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  tag         Tag             @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([templateId, tagId])
+}
+
+model InstanceTag {
+  instanceId  String
+  tagId       String
+  createdAt   DateTime        @default(now())
+
+  instance    RitualInstance  @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+  tag         Tag             @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([instanceId, tagId])
+}
+
+model RitualSeries {
+  id                String            @id @default(cuid())
+  communityId       String
+  templateId        String?
+  name              String
+  descriptionMarkdown String?         @db.Text
+  seriesType        SeriesType        @default(program)
+  recurrenceRule    String?           // iCal RRULE format
+  startDate         DateTime?
+  endDate           DateTime?
+  isActive          Boolean           @default(true)
+  metadata          String?           @db.Text  // JSON metadata
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  community         Community         @relation(fields: [communityId], references: [id])
+  template          RitualTemplate?   @relation(fields: [templateId], references: [id])
+  instances         RitualInstance[]
+
+  @@index([communityId])
+  @@index([templateId])
+  @@index([isActive])
+}
+
 model RitualTemplate {
   id                   String           @id @default(cuid())
   communityId          String
@@ -18,15 +119,21 @@ model RitualTemplate {
   descriptionMarkdown  String?
   ritualType           RitualType
   defaultDurationMinutes Int?
-  defaultTagsJson      String?          @db.Text
+  imageUrl             String?
+  capacity             Int?
+  isPublished          Boolean          @default(true)
   createdAt            DateTime         @default(now())
   updatedAt            DateTime         @updatedAt
 
+  community            Community        @relation(fields: [communityId], references: [id])
   steps                RitualStep[]
   instances            RitualInstance[]
+  tags                 TemplateTag[]
+  series               RitualSeries[]
 
   @@index([communityId])
   @@index([key])
+  @@index([isPublished])
 }
 
 model RitualStep {
@@ -49,17 +156,32 @@ model RitualStep {
 model RitualInstance {
   id               String                      @id @default(cuid())
   templateId       String
+  seriesId         String?
+  facilitatorId    String?
   scheduledStart   DateTime
   scheduledEnd     DateTime
+  actualStart      DateTime?
+  actualEnd        DateTime?
   status           InstanceStatus              @default(scheduled)
+  location         String?                     // Physical or virtual location
+  meetingUrl       String?
+  capacity         Int?
+  notesMarkdown    String?                     @db.Text
+  metadata         String?                     @db.Text  // JSON metadata
   createdAt        DateTime                    @default(now())
   updatedAt        DateTime                    @updatedAt
 
   template         RitualTemplate              @relation(fields: [templateId], references: [id])
+  series           RitualSeries?               @relation(fields: [seriesId], references: [id])
+  facilitator      Facilitator?                @relation(fields: [facilitatorId], references: [id])
   participants     ParticipantRegistration[]
   outcomes         OutcomeRecord[]
+  feedback         RitualFeedback[]
+  tags             InstanceTag[]
 
   @@index([templateId])
+  @@index([seriesId])
+  @@index([facilitatorId])
   @@index([status])
   @@index([scheduledStart])
 }
@@ -87,11 +209,45 @@ model OutcomeRecord {
   notesMarkdown     String?          @db.Text
   rating            Int?
   tagsJson          String?          @db.Text
+  isPublic          Boolean          @default(false)
   createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
 
   ritualInstance    RitualInstance   @relation(fields: [ritualInstanceId], references: [id], onDelete: Cascade)
 
   @@index([ritualInstanceId])
+  @@index([memberId])
+  @@index([isPublic])
+}
+
+model RitualFeedback {
+  id                String           @id @default(cuid())
+  ritualInstanceId  String
+  facilitatorId     String?
+  memberId          String
+
+  // Structured feedback dimensions
+  contentRating     Int?             // 1-5
+  facilitationRating Int?            // 1-5
+  energyRating      Int?             // 1-5
+  valueRating       Int?             // 1-5
+
+  // Qualitative feedback
+  highlights        String?          @db.Text
+  improvements      String?          @db.Text
+  comments          String?          @db.Text
+
+  wouldRecommend    Boolean?
+  wouldAttendAgain  Boolean?
+
+  createdAt         DateTime         @default(now())
+
+  ritualInstance    RitualInstance   @relation(fields: [ritualInstanceId], references: [id], onDelete: Cascade)
+  facilitator       Facilitator?     @relation(fields: [facilitatorId], references: [id])
+
+  @@unique([ritualInstanceId, memberId])
+  @@index([ritualInstanceId])
+  @@index([facilitatorId])
   @@index([memberId])
 }
 
@@ -120,4 +276,20 @@ enum ParticipantStatus {
   registered
   attended
   no_show
+}
+
+enum TagCategory {
+  general
+  ritual_type
+  theme
+  skill_level
+  duration
+  format
+}
+
+enum SeriesType {
+  program          // Multi-session structured program
+  recurring        // Ongoing recurring ritual
+  seasonal         // Tied to seasons/lunar cycles
+  cohort           // Specific group cohort
 }
